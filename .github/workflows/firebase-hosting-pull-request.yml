@@ -56,10 +56,8 @@ jobs:
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          # Reemplazar por el nombre exacto del secreto generado por `firebase init hosting:github`
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_REEMPLAZAR }}
-          # Reemplazar por tu Project ID de Firebase
-          projectId: REEMPLAZAR-POR-TU-PROJECT-ID
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PRACTICA_CICD_CURSOS_28354 }}
+          projectId: practica-cicd-cursos-28354
           expires: 3d
 
       # Gate de verificación sobre el preview (Destacado)
