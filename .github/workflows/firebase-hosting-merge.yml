@@ -62,4 +62,4 @@ jobs:
           channelId: live
 
       - name: Verificar headers de seguridad y caché en producción
-        run: node scripts/check-headers.mjs ${{ steps.deploy_live.outputs.details_url }}
+        run: node scripts/check-headers.mjs https://practica-cicd-cursos-28354.web.app
