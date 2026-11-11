@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Pipeline de PRODUCCIÓN: lo que se mergea a `main` se publica en el canal
+#  `live` de Firebase Hosting.
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy a producción
+
+# A1: Se ejecuta en cada push a la rama `main`
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# A4: En producción los deploys esperan en fila y nunca se cancelan a mitad de camino
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    # A5: Asociado al GitHub Environment `production`
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # A2: Variables de entorno del build con los datos del push a main
+      - name: Build (export estático)
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_BUILD_SHA: ${{ github.sha }}
+          NEXT_PUBLIC_BUILD_REF: ${{ github.ref_name }}
+          NEXT_PUBLIC_BUILD_TIME: ${{ github.event.head_commit.timestamp }}
+
+      # Desafío extra (Destacado): Calcular hashes SHA-256 de scripts inline para CSP sin 'unsafe-inline'
+      - name: Actualizar hashes SHA-256 de CSP en firebase.json
+        run: node scripts/csp-hashes.mjs
+
+      # A3: Despliegue al canal `live` (producción)
+      - name: Deploy al canal live
+        id: deploy_live
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          # Reemplazar por el nombre exacto del secreto generado por `firebase init hosting:github`
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_REEMPLAZAR }}
+          # Reemplazar por tu Project ID de Firebase
+          projectId: REEMPLAZAR-POR-TU-PROJECT-ID
+          channelId: live
+
+      - name: Verificar headers de seguridad y caché en producción
+        run: node scripts/check-headers.mjs ${{ steps.deploy_live.outputs.details_url }}

@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Pipeline de PREVIEW: cada Pull Request se despliega en un "preview channel"
+#  de Firebase Hosting (URL propia, temporal, aislada de producción).
+# ─────────────────────────────────────────────────────────────────────────────
+name: Preview en Pull Request
+
+# A1: Se ejecuta automáticamente en cada Pull Request
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write # la action comenta la URL del preview en el PR
+
+# A4: Si se pushea dos veces seguidas al mismo PR, se cancela el build anterior
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # A2: Variables de entorno del build con los datos del commit del PR
+      - name: Build (export estático)
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_BUILD_SHA: ${{ github.event.pull_request.head.sha }}
+          NEXT_PUBLIC_BUILD_REF: ${{ github.head_ref }}
+          NEXT_PUBLIC_BUILD_TIME: ${{ github.event.pull_request.updated_at }}
+
+      # Desafío extra (Destacado): Calcular hashes SHA-256 de scripts inline para CSP sin 'unsafe-inline'
+      - name: Actualizar hashes SHA-256 de CSP en firebase.json
+        run: node scripts/csp-hashes.mjs
+
+      # A3: Despliegue al preview channel con vencimiento de 3 días
+      - name: Deploy a preview channel
+        id: deploy_preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          # Reemplazar por el nombre exacto del secreto generado por `firebase init hosting:github`
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_REEMPLAZAR }}
+          # Reemplazar por tu Project ID de Firebase
+          projectId: REEMPLAZAR-POR-TU-PROJECT-ID
+          expires: 3d
+
+      # Gate de verificación sobre el preview (Destacado)
+      - name: Verificar headers de seguridad y caché en el preview
+        run: node scripts/check-headers.mjs ${{ steps.deploy_preview.outputs.details_url }}
